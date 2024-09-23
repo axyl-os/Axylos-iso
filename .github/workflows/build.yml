@@ -1,0 +1,64 @@
+name: Build AxylOS-V2 Release
+on:
+  workflow_dispatch:
+  schedule:
+     - cron:  '0 0 */1 * *'
+  
+jobs:
+  build:
+    env:
+      AXYL_VERSION: 'v2-preview-"$(date +%Y.%m.%d)"'
+      ISO_VERSION: 'v2-preview-"$(date +%Y.%m.%d)"'
+      ISO_ARCHITECTURE: 'x86_64'
+    runs-on: ubuntu-latest
+    permissions: write-all
+    container:
+      image: athenaos/base-devel:latest
+      options: --privileged 
+    steps:
+      - name: Checkout files
+        uses: actions/checkout@v3
+
+      - name: Init Keys
+        run: | 
+          rm -rf /etc/pacman.d/gnupg
+          pacman-key --init
+          pacman-key --populate
+          pacman -Syy
+
+      - name: Install dependencies
+        run: pacman -S --noconfirm archiso git github-cli openssh rsync sshpass wget tree
+        
+      - name: Build ArchISO
+        run: |
+          cd installation-scripts
+          ./build.sh
+
+      - name: Upload a Build Artifact
+        uses: actions/upload-artifact@v4.3.1
+        with:
+              name: axylos-2-iso-beta
+              path: /github/home/Axyl-Iso
+              if-no-files-found: warn
+              retention-days: 60
+              compression-level: 0
+              overwrite: false
+
+      - name: Create a GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+           cd $GITHUB_WORKSPACE
+           git clone https://github.com/axyl-os/axylos-2-iso
+           cd axylos-2-iso
+           gh release create v2-preview-"$(date +%Y.%m.%d)" --generate-notes
+      
+      - name: Upload to GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd $GITHUB_WORKSPACE
+          cd axylos-2-iso
+          for f in $(find /github/home/Axyl-Iso -name '*.iso*'); do
+              gh release upload v2-preview-"$(date +%Y.%m.%d)" $f --clobber
+          done
