@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+
+# setup-guix-complete - Complete the setup of Guix package manager
+# Copyright (c) 2023 AxylOS
+
+set -e
+
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+RED='\033[0;31m'
+BOLD='\033[1m'
+RESET='\033[0m'
+
+# Function to print colored messages
+print_msg() {
+  echo -e "${BLUE}${BOLD}[setup-guix-complete]${RESET} $1"
+}
+
+print_success() {
+  echo -e "${GREEN}${BOLD}[SUCCESS]${RESET} $1"
+}
+
+print_error() {
+  echo -e "${RED}${BOLD}[ERROR]${RESET} $1"
+}
+
+# Check if running as root
+if [ "$EUID" -ne 0 ]; then
+  print_error "This script must be run as root"
+  exit 1
+fi
+
+print_msg "Starting Guix installation..."
+
+# Check if Guix is already installed
+if [ -d "/gnu/store" ] && command -v guix &>/dev/null; then
+  print_success "Guix is already installed"
+  
+  # Enable and start the service
+  print_msg "Ensuring guix-daemon service is enabled and running..."
+  
+  if systemctl is-enabled guix-daemon.service &>/dev/null; then
+    print_success "guix-daemon.service is already enabled"
+  else
+    systemctl enable guix-daemon.service
+    print_success "Enabled guix-daemon.service"
+  fi
+  
+  if systemctl is-active guix-daemon.service &>/dev/null; then
+    print_success "guix-daemon.service is already running"
+  else
+    systemctl start guix-daemon.service
+    print_success "Started guix-daemon.service"
+  fi
+else
+  print_msg "Downloading and running Guix installer..."
+  
+  # Download and run the Guix installer script
+  wget -P /tmp https://git.savannah.gnu.org/cgit/guix.git/plain/etc/guix-install.sh
+  chmod +x /tmp/guix-install.sh
+  /tmp/guix-install.sh
+  rm -f /tmp/guix-install.sh
+fi
+
+# Setup Guix channel and update
+print_msg "Updating Guix..."
+guix pull
+
+# Creating profile.d script for Guix if it doesn't exist
+if [ ! -f "/etc/profile.d/guix.sh" ]; then
+  print_msg "Creating /etc/profile.d/guix.sh for environment setup..."
+  
+  cat > /etc/profile.d/guix.sh << 'EOF'
+# Setup Guix environment
+if [ -f "$HOME/.config/guix/current/etc/profile" ]; then
+  . "$HOME/.config/guix/current/etc/profile"
+elif [ -f "/var/guix/profiles/per-user/root/current-guix/etc/profile" ]; then
+  . "/var/guix/profiles/per-user/root/current-guix/etc/profile"
+fi
+EOF
+  chmod 755 /etc/profile.d/guix.sh
+fi
+
+print_success "Guix installation and configuration is complete!"
+print_msg "To use Guix, restart your terminal or run 'source /etc/profile.d/guix.sh'"
+print_msg "For information on using Guix, visit: https://guix.gnu.org/manual/"
+
+exit 0

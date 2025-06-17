@@ -25,4 +25,8 @@ file_permissions=(
   ["/usr/local/bin/axyl-before"]="0:0:755"
   ["/usr/local/bin/axyl-final"]="0:0:755"
   ["/usr/local/bin/remove-nvidia"]="0:0:755"
+  ["/usr/local/bin/setup-nix-guix"]="0:0:755"
+  ["/usr/local/bin/setup-nix-complete"]="0:0:755"
+  ["/usr/local/bin/setup-guix-complete"]="0:0:755"
+  ["/usr/local/bin/install-nix-guix"]="0:0:755")
 )

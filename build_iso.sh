@@ -17,6 +17,13 @@ packages=(
 	python-pydantic
 )
 
+# Build AUR packages (Nix and Guix)
+if [ -f "./installation-scripts/build-aur-packages.sh" ]; then
+    echo "Building AUR packages (Nix and Guix)..."
+    chmod +x ./installation-scripts/build-aur-packages.sh
+    ./installation-scripts/build-aur-packages.sh
+fi
+
 mkdir -p /tmp/archlive/airootfs/root/archinstall-git
 cp -r . /tmp/archlive/airootfs/root/archinstall-git
 
@@ -45,5 +52,12 @@ done
 
 find /tmp/archlive
 cd /tmp/archlive
+
+# Copy AUR packages if available
+if [ -f "./installation-scripts/aur-packages.tar.zst" ]; then
+    echo "Including AUR packages in the ISO..."
+    mkdir -p /tmp/archlive/airootfs/opt/aur-packages
+    cp ./installation-scripts/aur-packages.tar.zst /tmp/archlive/airootfs/opt/aur-packages/
+fi
 
 mkarchiso -v -w work/ -o out/ ./

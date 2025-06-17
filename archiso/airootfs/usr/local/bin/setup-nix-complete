@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+
+# setup-nix-complete - Complete the setup of Nix package manager
+# Copyright (c) 2023 AxylOS
+
+set -e
+
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+RED='\033[0;31m'
+BOLD='\033[1m'
+RESET='\033[0m'
+
+# Function to print colored messages
+print_msg() {
+  echo -e "${BLUE}${BOLD}[setup-nix-complete]${RESET} $1"
+}
+
+print_success() {
+  echo -e "${GREEN}${BOLD}[SUCCESS]${RESET} $1"
+}
+
+print_error() {
+  echo -e "${RED}${BOLD}[ERROR]${RESET} $1"
+}
+
+# Check if running as root
+if [ "$EUID" -ne 0 ]; then
+  print_error "This script must be run as root"
+  exit 1
+fi
+
+print_msg "Starting Nix installation..."
+
+# Check if Nix is already installed
+if [ -d "/nix/store" ] && command -v nix &>/dev/null; then
+  print_success "Nix is already installed"
+  
+  # Enable and start the service
+  print_msg "Ensuring nix-daemon service is enabled and running..."
+  
+  if systemctl is-enabled nix-daemon.service &>/dev/null; then
+    print_success "nix-daemon.service is already enabled"
+  else
+    systemctl enable nix-daemon.service
+    print_success "Enabled nix-daemon.service"
+  fi
+  
+  if systemctl is-active nix-daemon.service &>/dev/null; then
+    print_success "nix-daemon.service is already running"
+  else
+    systemctl start nix-daemon.service
+    print_success "Started nix-daemon.service"
+  fi
+else
+  print_msg "Downloading and running Nix installer..."
+  
+  # Use multi-user installation
+  curl -L https://nixos.org/nix/install | sh -s -- --daemon
+  
+  # Source nix environment
+  if [ -e '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh' ]; then
+    . '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh'
+  fi
+fi
+
+# Setup Nix channel and collect garbage
+print_msg "Setting up Nix channels..."
+nix-channel --add https://nixos.org/channels/nixpkgs-unstable nixpkgs
+nix-channel --update
+
+# Creating profile.d script for Nix if it doesn't exist
+if [ ! -f "/etc/profile.d/nix.sh" ]; then
+  print_msg "Creating /etc/profile.d/nix.sh for environment setup..."
+  
+  cat > /etc/profile.d/nix.sh << 'EOF'
+# Setup Nix environment
+if [ -e '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh' ]; then
+  . '/nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh'
+fi
+EOF
+  chmod 755 /etc/profile.d/nix.sh
+fi
+
+print_success "Nix installation and configuration is complete!"
+print_msg "To use Nix, restart your terminal or run 'source /etc/profile.d/nix.sh'"
+print_msg "For information on using Nix, visit: https://nixos.org/manual/nix/stable/"
+
+exit 0

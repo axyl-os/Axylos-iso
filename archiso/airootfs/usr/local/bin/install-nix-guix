@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+
+# install-nix-guix - Install Nix and Guix from bundled packages
+# Copyright (c) 2023 AxylOS
+
+set -e
+
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+RED='\033[0;31m'
+BOLD='\033[1m'
+RESET='\033[0m'
+
+# Function to print colored messages
+print_msg() {
+  echo -e "${BLUE}${BOLD}[install-nix-guix]${RESET} $1"
+}
+
+print_success() {
+  echo -e "${GREEN}${BOLD}[SUCCESS]${RESET} $1"
+}
+
+print_error() {
+  echo -e "${RED}${BOLD}[ERROR]${RESET} $1"
+}
+
+# Check if running as root
+if [ "$EUID" -ne 0 ]; then
+  print_error "This script must be run as root"
+  exit 1
+fi
+
+# Check if AUR packages are available
+AUR_PACKAGES_PATH="/opt/aur-packages/aur-packages.tar.zst"
+if [ ! -f "$AUR_PACKAGES_PATH" ]; then
+  print_error "AUR packages not found at $AUR_PACKAGES_PATH"
+  print_msg "You may need to install Nix and Guix manually using the AUR"
+  exit 1
+fi
+
+print_msg "Installing Nix and Guix from bundled AUR packages..."
+
+# Create temporary directory for extraction
+TEMP_DIR=$(mktemp -d)
+print_msg "Extracting packages to $TEMP_DIR..."
+tar -xf "$AUR_PACKAGES_PATH" -C "$TEMP_DIR"
+
+# Install all packages using pacman
+print_msg "Installing packages with pacman..."
+find "$TEMP_DIR" -name "*.pkg.*" -print0 | sort -z | xargs -0 pacman -U --needed --noconfirm
+
+# Clean up temp directory
+rm -rf "$TEMP_DIR"
+
+# Run setup scripts for Nix and Guix
+print_msg "Setting up Nix..."
+/usr/local/bin/setup-nix-guix
+
+print_msg "To complete the installation:"
+print_msg "1. For Nix: Run 'sudo setup-nix-complete'"
+print_msg "2. For Guix: Run 'sudo setup-guix-complete'"
+
+print_success "Installation of Nix and Guix packages completed!"
+
+# Create directories and users
+print_msg "Creating required directories and users for Nix and Guix..."
+
+# Create nix group and users
+groupadd -r nixbld 2>/dev/null || true
+for i in {1..10}; do
+  useradd -r -g nixbld -d /var/empty -s /bin/nologin -c "Nix build user $i" "nixbld$i" 2>/dev/null || true
+done
+
+# Create guix group and users
+groupadd -r guixbuild 2>/dev/null || true
+for i in {1..10}; do
+  useradd -r -g guixbuild -d /var/empty -s /bin/false -c "Guix build user $i" "guixbuilder$i" 2>/dev/null || true
+done
+
+# Create required directories
+mkdir -p /nix /etc/nix /var/guix /gnu
+
+# Set ownership and permissions
+chown -R root:nixbld /nix
+chmod 1777 /nix
+
+chown -R root:guixbuild /var/guix /gnu
+chmod 1777 /var/guix /gnu
+
+# Create default nix.conf
+if [ ! -f /etc/nix/nix.conf ]; then
+  cat > /etc/nix/nix.conf <<EOF
+build-users-group = nixbld
+experimental-features = nix-command flakes
+EOF
+fi
+
+print_success "Setup complete!"
+print_msg "Refer to /usr/share/doc/axyl/nix-guix-readme.md for usage instructions"
+exit 0

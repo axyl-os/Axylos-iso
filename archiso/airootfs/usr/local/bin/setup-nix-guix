@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+
+# setup-nix-guix - Setup script for Nix and Guix package managers
+# Copyright (c) 2023 AxylOS
+
+set -e
+
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+RED='\033[0;31m'
+BOLD='\033[1m'
+RESET='\033[0m'
+
+# Function to print colored messages
+print_msg() {
+  echo -e "${BLUE}${BOLD}[setup-nix-guix]${RESET} $1"
+}
+
+print_success() {
+  echo -e "${GREEN}${BOLD}[SUCCESS]${RESET} $1"
+}
+
+print_error() {
+  echo -e "${RED}${BOLD}[ERROR]${RESET} $1"
+}
+
+# Check if running as root
+if [ "$EUID" -ne 0 ]; then
+  print_error "This script must be run as root"
+  exit 1
+fi
+
+setup_nix() {
+  print_msg "Setting up Nix package manager..."
+  
+  if command -v nix &>/dev/null; then
+    print_msg "Nix is already installed"
+  else
+    print_msg "Creating Nix directories and user/group..."
+    
+    # Create nix group and user if they don't exist
+    groupadd -r nixbld || true
+    
+    for i in {1..10}; do
+      useradd -r -g nixbld -d /var/empty -s /bin/nologin -c "Nix build user $i" "nixbld$i" || true
+    done
+    
+    # Create required directories
+    mkdir -p /nix /etc/nix
+    
+    # Create nix.conf if it doesn't exist
+    if [ ! -f /etc/nix/nix.conf ]; then
+      cat > /etc/nix/nix.conf <<EOF
+build-users-group = nixbld
+experimental-features = nix-command flakes
+EOF
+    fi
+    
+    # Set ownership and permissions
+    chown -R root:nixbld /nix
+    chmod 1777 /nix
+    
+    print_success "Nix has been configured"
+    print_msg "To complete installation, run: sh <(curl -L https://nixos.org/nix/install) --daemon"
+    print_msg "Or for single-user mode: sh <(curl -L https://nixos.org/nix/install) --no-daemon"
+  fi
+}
+
+setup_guix() {
+  print_msg "Setting up Guix package manager..."
+  
+  if command -v guix &>/dev/null; then
+    print_msg "Guix is already installed"
+  else
+    print_msg "Creating Guix directories and user/group..."
+    
+    # Create guix group and user if they don't exist
+    groupadd -r guixbuild || true
+    
+    for i in {1..10}; do
+      useradd -r -g guixbuild -d /var/empty -s /bin/false -c "Guix build user $i" "guixbuilder$i" || true
+    done
+    
+    # Create required directories
+    mkdir -p /var/guix /gnu
+    
+    # Set ownership and permissions
+    chown -R root:guixbuild /var/guix /gnu
+    chmod 1777 /var/guix /gnu
+    
+    print_success "Guix has been configured"
+    print_msg "To complete installation, run: wget -P /tmp https://git.savannah.gnu.org/cgit/guix.git/plain/etc/guix-install.sh && chmod +x /tmp/guix-install.sh && /tmp/guix-install.sh"
+  fi
+}
+
+# Main execution
+
+print_msg "Starting setup for Nix and Guix package managers..."
+
+# Setup Nix
+setup_nix
+
+# Setup Guix
+setup_guix
+
+print_msg "Creating systemd services for Nix and Guix daemons..."
+
+# Create nix-daemon.service if it doesn't exist
+if [ ! -f /etc/systemd/system/nix-daemon.service ]; then
+  cat > /etc/systemd/system/nix-daemon.service <<EOF
+[Unit]
+Description=Nix daemon
+After=network.target
+
+[Service]
+ExecStart=/nix/var/nix/profiles/default/bin/nix-daemon
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target
+EOF
+fi
+
+print_success "Setup complete!"
+print_msg "To use Nix: run setup-nix-complete to finish installation or manually install using the commands shown"
+print_msg "To use Guix: run setup-guix-complete to finish installation or manually install using the command shown"
+print_msg "You may need to restart your system or log out and back in for all changes to take effect"
+
+exit 0

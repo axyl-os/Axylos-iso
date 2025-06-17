@@ -325,3 +325,9 @@ shell-color-scripts
 tty-clock
 unimatrix-git
 xfce-polkit
+
+########################
+#### Nix and Guix ######
+########################
+nix
+guix

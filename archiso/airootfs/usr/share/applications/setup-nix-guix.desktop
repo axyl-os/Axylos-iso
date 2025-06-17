@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Install Nix & Guix
+GenericName=Package Manager Installation
+Comment=Install and set up Nix and Guix package managers
+Exec=alacritty -e sudo /usr/local/bin/install-nix-guix
+Icon=system-software-install
+Terminal=false
+Categories=System;PackageManager;
+Keywords=nix;guix;package;manager;install;setup;
+StartupNotify=true
